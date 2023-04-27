@@ -1,7 +1,10 @@
-const sprint = require("../src/sprint.js");
-const testing = require("../lib/testing.js");
+const {deepStrictEqual} = require('assert');
+const {describe, it} = require('node:test');
+const {main} = require("../src/sprint.js");
 
-const main = sprint.main;
-const assert = testing.assertTest;
+describe('Sprint', function() {
+  it('Should return return 0 on successful execution', function() {
+    deepStrictEqual(main(), 0);
+  });
+});
 
-main();
