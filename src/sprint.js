@@ -1,94 +1,132 @@
-const load = function(code, memory) {
-  return code.map(function(token) {
-    memory.push(token);
-  });
+const assign = function({pc, memory, halt}) {
+  const [data, cell] = memory.slice(pc + 1, pc + 3);
+  memory[cell] = data;
+
+  return {memory, halt, pc: pc + 3};
 };
 
-const assign = function(memory, pc) {
-  const data = memory[pc + 1];
-  const index = memory[pc + 2];
-  memory[index] = data;
-  return pc + 3;
+const add = function({pc, memory, halt}) {
+  const [addendCell, augendCell, resCell] = memory.slice(pc + 1, pc + 4); 
+  memory[resCell] = memory[augendCell] + memory[addendCell];
+
+  return {memory, halt, pc: pc + 4};
 };
 
-const add = function(memory, pc) {
-  const resultIndex = memory[pc + 3];
-  const augendIndex = memory[pc + 1];
-  const addendIndex = memory[pc + 2];
-  memory[resultIndex] = memory[augendIndex] + memory[addendIndex];
-  return pc + 4;
+const sub = function({pc, memory, halt}) {
+  const [minuendCell, subtrahendCell, resCell] = memory.slice(pc + 1, pc + 4);
+  memory[resCell] = memory[minuendCell] - memory[subtrahendCell];
+
+  return {memory, halt, pc: pc + 4};
 };
 
-const sub = function(memory, pc) {
-  const resultIndex = memory[pc + 3];
-  const minuendIndex = memory[pc + 1];
-  const subtrahendIndex = memory[pc + 2];
-  memory[resultIndex] = memory[minuendIndex] - memory[subtrahendIndex];
-  return pc + 4;
+const jump = function({pc, memory, halt}) {
+  const jumpLocation = memory[pc + 1];
+  return {memory, halt, pc: jumpLocation};
 };
 
-const jump = function(memory, pc) {
-  return memory[pc + 1];
-};
+const jumpEqual = function({pc, memory, halt}) {
+  const [lhs, rhs] = memory.slice(pc + 1, pc + 3);
+  let jumpLocation = pc + 4;
 
-const jumpEqual = function(memory, pc) {
-  const lhsIndex = memory[pc + 1];
-  const rhsIndex = memory[pc + 2];
-  if(memory[lhsIndex] === memory[rhsIndex]) {
-    return memory[pc + 3];
+  if(memory[lhs] === memory[rhs]) {
+    jumpLocation = memory[pc + 3];
   }
 
-  return pc + 4;
+  return {memory, halt, pc: jumpLocation};
 };
 
-const jumpLessThan = function(memory, pc) {
-  const lhsIndex = memory[pc + 1];
-  const rhsIndex = memory[pc + 2];
-  if(memory[lhsIndex] < memory[rhsIndex]) {
-    return memory[pc + 3];
+const jumpLess = function({pc, memory, halt}) {
+  const [lhs, rhs] = memory.slice(pc + 1, pc + 3);
+  let jumpLocation = pc + 4;
+
+  if(memory[lhs] < memory[rhs]) {
+    jumpLocation = memory[pc + 3];
   }
 
-  return pc + 4;
+  return {memory, halt, pc: jumpLocation};
 };
 
-const operations = {
+const halt = function({pc, memory}) {
+  return {memory, halt: true, pc: pc + 1};
+};
+
+const opCode = {
   '0': assign,
   '1': add,
   '2': sub,
   '3': jump,
   '4': jumpEqual,
-  '5': jumpLessThan
+  '5': jumpLess,
+  '9': halt
 };
 
-const execute = function(memory) {
-  let pc = 0;
+const generateTokens = function(code) {
+  const symbols = code.split(" ");
 
-  while(true) {
-    const currentOperation = memory[pc]; 
-    if(currentOperation === 9) {
-      return 0;
+  return symbols.map(function(symbol) {
+    if(symbol.includes(':')) {
+      const fields = symbol.split(':');
+
+      return {value: fields[1], label: fields[0]};
     }
-    pc = operations[currentOperation](memory, pc);
+
+    return {value: symbol};
+  });
+};
+
+const generateSymbolTable = function(tokens) {
+  const label = 'label';
+  return tokens.reduce(function(symbolTable, token, index) {
+    if(label in token) {
+      symbolTable[token.label] = index;
+    }
+
+    return symbolTable;
+  }, {});
+};
+
+const generateCode = function(tokens, symbolTable) {
+  return tokens.reduce(function(executableCode, token) {
+    return [...executableCode, token.value in symbolTable ? symbolTable[token.value] :  +token.value];
+  }, []);
+};
+
+const load = function(code) {
+  const tokens = generateTokens(code);
+  const symbolTable = generateSymbolTable(tokens);
+  const executableCode = generateCode(tokens, symbolTable);
+  return executableCode;
+};
+
+const execute = function(state) {
+  while(!state.halt) {
+    const {memory, pc} = state;
+    const lookUp = memory[pc];
+    const currentOperation = opCode[lookUp];
+
+    state = currentOperation(state);
   }
+
+  return state;
+};
+
+const initializeState = function(code) {
+  const memory = load(code);
+  const pc = 0;
+  const halt = false;
+  return {memory, pc, halt};
+}; 
+
+const display = function(state) {
+  console.log(state.join(' | '));
 };
 
 const main = function() {
-  const memory = [];
-  const code = [
-    0, 24, 100,
-    0, 5, 101,
-    0, 0, 102,
-    0, 0, 103,
-    5, 100, 103, 22,
-    1, 101, 103, 103,
-    3, 12,
-    2, 103, 101, 103,
-    2, 100, 103, 102,
-    9
-  ];
-  load(code, memory);
-  execute(memory);
-  return 0;
+  const code = "3 main main:0 45 13 0 55 14 1 13 14 15 9";
+  const state = initializeState(code);
+  const newState = execute(state);
+
+  display(newState.memory);
 };
 
-exports.main = main;
+exports.execute = execute;
